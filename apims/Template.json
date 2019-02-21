@@ -1,0 +1,448 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "LogicAppLocation": {
+      "type": "string",
+      "minLength": 1,
+      "allowedValues": [
+        "[resourceGroup().location]",
+        "eastasia",
+        "southeastasia",
+        "centralus",
+        "eastus",
+        "eastus2",
+        "westus",
+        "northcentralus",
+        "southcentralus",
+        "northeurope",
+        "westeurope",
+        "japanwest",
+        "japaneast",
+        "brazilsouth",
+        "australiaeast",
+        "australiasoutheast",
+        "southindia",
+        "centralindia",
+        "westindia",
+        "canadacentral",
+        "canadaeast",
+        "uksouth",
+        "ukwest",
+        "westcentralus",
+        "westus2"
+      ],
+      "defaultValue": "westeurope"
+    },
+    "orchestratorlogicAppName": {
+      "type": "string",
+      "minLength": 1
+    },
+    "burlogicAppName": {
+      "type": "string",
+      "minLength": 1
+    },
+    "APIMsToBackup": {
+      "type": "string"
+    },
+    "ADApplicationId": {
+      "type": "string"
+    },
+    "ADAppClientSecret": {
+      "type": "string"
+    },
+    "StorageContainerName": {
+      "type": "string"
+    },
+    "Operation": {
+      "type": "string"
+    },
+    "StorageAccountName": {
+      "type": "string"
+    },
+    "SubscriptionId": {
+      "type": "string"
+    },
+    "TenantId": {
+      "type": "string"
+    }
+  },
+  "variables": {
+    "CorelogicApp": "[parameters('burlogicAppName')]"
+  },
+  "resources": [
+    {
+      "name": "[parameters('storageAccountName')]",
+      "type": "Microsoft.Storage/storageAccounts",
+      "apiVersion": "2018-02-01",
+      "location": "[parameters('LogicAppLocation')]",
+      "kind": "StorageV2",
+      "sku": {
+        "name": "Standard_LRS",
+        "tier": "Standard"
+      },
+      "properties": {
+        "accessTier": "Hot"
+      },
+      "resources": [
+        {
+          "name": "[concat('default/', parameters('StorageContainerName'))]",
+          "type": "blobServices/containers",
+          "apiVersion": "2018-03-01-preview",
+          "dependsOn": [
+            "[parameters('storageAccountName')]"
+          ]
+        }
+      ]
+    },
+    {
+      "properties": {
+        "state": "Enabled",
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {},
+          "triggers": {
+            "manual": {
+              "type": "Request",
+              "kind": "Http",
+              "inputs": {
+                "schema": {
+                  "properties": {
+                    "accessKey": {
+                      "type": "string"
+                    },
+                    "apimInstance": {
+                      "type": "string"
+                    },
+                    "applicationId": {
+                      "type": "string"
+                    },
+                    "backupName": {
+                      "type": "string"
+                    },
+                    "clientSecret": {
+                      "type": "string"
+                    },
+                    "containerName": {
+                      "type": "string"
+                    },
+                    "operation": {
+                      "type": "string"
+                    },
+                    "resourceGroup": {
+                      "type": "string"
+                    },
+                    "storageAccount": {
+                      "type": "string"
+                    },
+                    "subscriptionId": {
+                      "type": "string"
+                    },
+                    "tenantId": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "actions": {
+            "Create_Auhtentication_Body": {
+              "runAfter": {},
+              "type": "Compose",
+              "inputs": "client_id=@{triggerBody()?['applicationId']}&client_secret=@{triggerBody()?['clientSecret']}&grant_type=client_credentials&resource=https://management.azure.com"
+            },
+            "Create_Authentication_Header": {
+              "runAfter": {
+                "Request_Auhtentication_Token": [
+                  "Succeeded"
+                ]
+              },
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "bearertoken",
+                    "type": "String",
+                    "value": "@{concat('Bearer ',body('Request_Auhtentication_Token')['access_token'])}"
+                  }
+                ]
+              }
+            },
+            "Invoke_Management_API": {
+              "runAfter": {
+                "Create_Authentication_Header": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Http",
+              "inputs": {
+                "authentication": {
+                  "type": "Raw",
+                  "value": "@variables('bearertoken')"
+                },
+                "body": {
+                  "accessKey": "@{triggerBody()?['accessKey']}",
+                  "backupname": "@{triggerBody()?['backupName']}",
+                  "containerName": "@{triggerBody()?['containerName']}",
+                  "storageAccount": "@{triggerBody()?['storageAccount']}"
+                },
+                "headers": {
+                  "Content-Type": "application/json"
+                },
+                "method": "POST",
+                "uri": "https://management.azure.com/subscriptions/@{triggerBody()?['subscriptionId']}/resourceGroups/@{triggerBody()?['resourceGroup']}/providers/Microsoft.ApiManagement/service/@{triggerBody()?['apimInstance']}/@{triggerBody()?['operation']}?api-version=2014-02-14"
+              }
+            },
+            "Request_Auhtentication_Token": {
+              "runAfter": {
+                "Create_Auhtentication_Body": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Http",
+              "inputs": {
+                "body": "@outputs('Create_Auhtentication_Body')",
+                "headers": {
+                  "Content-Type": "application/x-www-form-urlencoded"
+                },
+                "method": "POST",
+                "uri": "https://login.microsoftonline.com/9c7d9dd3-840c-4b3f-818e-552865082e16/oauth2/token"
+              }
+            }
+          },
+          "outputs": {
+          }
+        },
+        "parameters": {}
+      },
+      "name": "[parameters('burlogicAppName')]",
+      "type": "Microsoft.Logic/workflows",
+      "location": "[parameters('LogicAppLocation')]",
+      "apiVersion": "2016-06-01",
+      "dependsOn": [
+        "[parameters('storageAccountName')]"
+      ],
+      "tags": {
+        "displayName": "LogicApp"
+      }
+    },
+    {
+      "properties": {
+        "state": "Enabled",
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+            "apimsForBackup": {
+              "defaultValue": "{\"apims\":[{\"APIMName\":\"eapim-dev-custeng-apim\",\"ResourceGroup\":\"eapim-dev-custeng\"},{\"APIMName\":\"eapim-dev-apim-poc\",\"ResourceGroup\":\"eapim-dev-apim\"}]}\"",
+              "type": "String"
+            },
+            "accessKey": {
+              "type": "string"
+            },
+            "applicationId": {
+              "type": "string"
+            },
+            "clientSecret": {
+              "type": "string"
+            },
+            "containerName": {
+              "type": "string"
+            },
+            "operation": {
+              "type": "string"
+            },
+            "storageAccount": {
+              "type": "string"
+            },
+            "subscriptionId": {
+              "type": "string"
+            },
+            "tenantId": {
+              "type": "string"
+            }
+          },
+          "triggers": {
+            "Recurrence": {
+              "recurrence": {
+                "frequency": "Day",
+                "interval": 1
+              },
+              "type": "Recurrence"
+            }
+          },
+          "actions": {
+            "For_each": {
+              "foreach": "@body('Parse_JSON')['apims']",
+              "actions": {
+                "HTTP_2": {
+                  "runAfter": {
+                    "Parse_JSON_2": [
+                      "Succeeded"
+                    ]
+                  },
+                  "type": "Http",
+                  "inputs": {
+                    "body": {
+                      "accessKey": "[listKeys(resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName')), providers('Microsoft.Storage', 'storageAccounts').apiVersions[0]).keys[0].value]",
+                      "apimInstance": "@{body('Parse_JSON_2')['APIMName']}",
+                      "applicationId": "@{parameters('applicationId')}",
+                      "backupName": "@{body('Parse_JSON_2')['APIMName']}-backup",
+                      "clientSecret": "@{parameters('clientSecret')}",
+                      "containerName": "apimbackups",
+                      "operation": "@{parameters('operation')}",
+                      "resourceGroup": "@{body('Parse_JSON_2')['ResourceGroup']}",
+                      "storageAccount": "@{parameters('storageAccount')}",
+                      "subscriptionId": "@{parameters('subscriptionId')}",
+                      "tenantId": "@{parameters('tenantId')}"
+                    },
+                    "method": "POST",
+                    "uri": "[listCallbackURL(concat(resourceId('Microsoft.Logic/workflows/', variables('CorelogicApp')), '/triggers/manual'), '2016-06-01').value]"
+                  }
+                },
+                "Parse_JSON_2": {
+                  "runAfter": {},
+                  "type": "ParseJson",
+                  "inputs": {
+                    "content": "@items('For_each')",
+                    "schema": {
+                      "$schema": "http://json-schema.org/draft-04/schema#",
+                      "properties": {
+                        "APIMName": {
+                          "type": "string"
+                        },
+                        "ResourceGroup": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "ResourceGroup",
+                        "APIMName"
+                      ],
+                      "type": "object"
+                    }
+                  }
+                }
+              },
+              "runAfter": {
+                "Parse_JSON": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Foreach"
+            },
+            "Initialize_variable": {
+              "runAfter": {},
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "apims",
+                    "type": "String",
+                    "value": "@{parameters('apimsForBackup')}"
+                  }
+                ]
+              }
+            },
+            "Parse_JSON": {
+              "runAfter": {
+                "Initialize_variable": [
+                  "Succeeded"
+                ]
+              },
+              "type": "ParseJson",
+              "inputs": {
+                "content": "@variables('apims')",
+                "schema": {
+                  "$schema": "http://json-schema.org/draft-04/schema#",
+                  "properties": {
+                    "apims": {
+                      "items": [
+                        {
+                          "properties": {
+                            "APIMName": {
+                              "type": "string"
+                            },
+                            "ResourceGroup": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "ResourceGroup",
+                            "APIMName"
+                          ],
+                          "type": "object"
+                        },
+                        {
+                          "properties": {
+                            "APIMName": {
+                              "type": "string"
+                            },
+                            "ResourceGroup": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "ResourceGroup",
+                            "APIMName"
+                          ],
+                          "type": "object"
+                        }
+                      ],
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "apims"
+                  ],
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "outputs": {}
+        },
+        "parameters": {
+          "apimsForBackup": {
+            "value": "[parameters('APIMsToBackup')]"
+          },
+          "applicationId": {
+            "value": "[parameters('ADApplicationId')]"
+          },
+          "clientSecret": {
+            "value": "[parameters('ADAppClientSecret')]"
+          },
+          "containerName": {
+            "value": "[parameters('StorageContainerName')]"
+          },
+          "operation": {
+            "value": "[parameters('Operation')]"
+          },
+          "storageAccount": {
+            "value": "[parameters('StorageAccountName')]"
+          },
+          "subscriptionId": {
+            "value": "[parameters('SubscriptionId')]"
+          },
+          "tenantId": {
+            "value": "[parameters('TenantId')]"
+          }
+        }
+      },
+      "name": "[parameters('orchestratorlogicAppName')]",
+      "type": "Microsoft.Logic/workflows",
+      "location": "[parameters('LogicAppLocation')]",
+      "tags": {
+        "displayName": "[parameters('orchestratorlogicAppName')]"
+      },
+      "apiVersion": "2016-06-01",
+      "dependsOn": [
+        "[parameters('burlogicAppName')]"
+      ]
+    }
+  ],
+  "outputs": {}
+    }
