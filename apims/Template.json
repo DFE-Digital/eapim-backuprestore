@@ -287,7 +287,7 @@
                       "accessKey": "[listKeys(resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName')), providers('Microsoft.Storage', 'storageAccounts').apiVersions[0]).keys[0].value]",
                       "apimInstance": "@{body('Parse_JSON_2')['APIMName']}",
                       "applicationId": "@{parameters('applicationId')}",
-                      "backupName": "@{body('Parse_JSON_2')['APIMName']}-backup",
+                      "backupName": "@{body('Parse_JSON_2')['APIMName']}-backup-@{utcNow()}",
                       "clientSecret": "@{parameters('clientSecret')}",
                       "containerName": "apimbackups",
                       "operation": "@{parameters('operation')}",
