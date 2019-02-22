@@ -38,6 +38,10 @@
       "type": "string",
       "minLength": 1
     },
+    "RestoreAPIMLogicAppName": {
+      "type": "string",
+      "minLength": 1
+    },    
     "burlogicAppName": {
       "type": "string",
       "minLength": 1
@@ -439,7 +443,149 @@
       "dependsOn": [
         "[parameters('burlogicAppName')]"
       ]
-    }
+    },
+    {
+      "properties": {
+        "state": "Enabled",
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+            "applicationId": {
+              "type": "string"
+            },
+            "clientSecret": {
+              "type": "string"
+            },
+            "containerName": {
+              "type": "string"
+            },
+            "storageAccount": {
+              "type": "string"
+            },
+            "subscriptionId": {
+              "type": "string"
+            },
+            "tenantId": {
+              "type": "string"
+            }
+          },
+          "triggers": {
+            "manual": {
+              "type": "Request",
+              "kind": "Http",
+              "inputs": {
+                "schema": {
+                  "$schema": "http://json-schema.org/draft-04/schema#",
+                  "properties": {
+                    "apimInstance": {
+                      "type": "string"
+                    },
+                    "backupName": {
+                      "type": "string"
+                    },
+                    "resourceGroup": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "apimInstance",
+                    "backupName",
+                    "resourceGroup"
+                  ],
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "actions": {
+            "HTTP": {
+              "runAfter": {
+                "Parse_JSON": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Http",
+              "inputs": {
+                "body": {
+                  "accessKey": "[listKeys(resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName')), providers('Microsoft.Storage', 'storageAccounts').apiVersions[0]).keys[0].value]",
+                  "apimInstance": "@{body('Parse_JSON')['apimInstance']}",
+                  "applicationId": "@{parameters('applicationId')}",
+                  "backupName": "@{body('Parse_JSON')['backupName']}",
+                  "clientSecret": "@{parameters('clientSecret')}",
+                  "containerName": "apimbackups",
+                  "operation": "restore",
+                  "resourceGroup": "@{body('Parse_JSON')['resourceGroup']}",
+                  "storageAccount": "@{parameters('storageAccount')}",
+                  "subscriptionId": "@{parameters('subscriptionId')}",
+                  "tenantId": "@{parameters('tenantId')}"
+                },
+                "method": "POST",
+                "uri": "[listCallbackURL(concat(resourceId('Microsoft.Logic/workflows/', variables('CorelogicApp')), '/triggers/manual'), '2016-06-01').value]"
+              }
+            },
+            "Parse_JSON": {
+              "runAfter": {},
+              "type": "ParseJson",
+              "inputs": {
+                "content": "@triggerBody()",
+                "schema": {
+                  "$schema": "http://json-schema.org/draft-04/schema#",
+                  "properties": {
+                    "apimInstance": {
+                      "type": "string"
+                    },
+                    "backupName": {
+                      "type": "string"
+                    },
+                    "resourceGroup": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "apimInstance",
+                    "backupName",
+                    "resourceGroup"
+                  ],
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "outputs": {}
+        },
+        "parameters": {
+          "applicationId": {
+            "value": "[parameters('ADApplicationId')]"
+          },
+          "clientSecret": {
+            "value": "[parameters('ADAppClientSecret')]"
+          },
+          "containerName": {
+            "value": "[parameters('StorageContainerName')]"
+          },
+          "storageAccount": {
+            "value": "[parameters('StorageAccountName')]"
+          },
+          "subscriptionId": {
+            "value": "[parameters('SubscriptionId')]"
+          },
+          "tenantId": {
+            "value": "[parameters('TenantId')]"
+          }
+        }
+      },
+      "name": "[parameters('RestoreAPIMLogicAppName')]",
+      "type": "Microsoft.Logic/workflows",
+      "location": "[parameters('LogicAppLocation')]",
+      "tags": {
+        "displayName": "LogicApp"
+      },
+      "apiVersion": "2016-06-01",
+      "dependsOn": [
+        "[parameters('burlogicAppName')]"
+      ]      
+    }    
   ],
   "outputs": {}
     }
