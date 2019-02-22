@@ -240,9 +240,6 @@
               "defaultValue": "{\"apims\":[{\"APIMName\":\"eapim-dev-custeng-apim\",\"ResourceGroup\":\"eapim-dev-custeng\"},{\"APIMName\":\"eapim-dev-apim-poc\",\"ResourceGroup\":\"eapim-dev-apim\"}]}\"",
               "type": "String"
             },
-            "accessKey": {
-              "type": "string"
-            },
             "applicationId": {
               "type": "string"
             },
